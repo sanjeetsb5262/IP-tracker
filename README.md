@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time GPS + IP Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        body { font-family: Arial; text-align: center; margin-top: 20px; }
+        #map { height: 450px; width: 90%; margin: 20px auto; border: 2px solid #ccc; border-radius: 10px; }
+        #info { font-size: 16px; margin-top: 10px; }
+        button { padding: 10px 20px; font-size: 16px; }
+    </style>
+</head>
+<body>
+
+<h2>Real-Time GPS + IP Tracker</h2>
+<p>Click “Start Tracking” and allow location access.</p>
+
+<button onclick="startTracking()">Start Tracking</button>
+
+<div id="info">Waiting for permission…</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+let map, marker, pathLine;
+let positions = [];
+
+async function getIP() {
+    try {
+        const response = await fetch("https://ipapi.co/json/");
+        const data = await response.json();
+        return data; // Contains IP, city, region, country, etc.
+    } catch(e) {
+        return {ip: 'Unknown', city: 'Unknown', region: 'Unknown', country_name: 'Unknown'};
+    }
+}
+
+function initMap(lat, lon) {
+    map = L.map('map').setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    marker = L.marker([lat, lon]).addTo(map).bindPopup("You are here!").openPopup();
+    pathLine = L.polyline([], {color: 'blue'}).addTo(map);
+}
+
+function updateMap(lat, lon) {
+    positions.push([lat, lon]);
+    marker.setLatLng([lat, lon]);
+    pathLine.setLatLngs(positions);
+    map.panTo([lat, lon]);
+}
+
+async function startTracking() {
+    const ipData = await getIP();
+    
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser.");
+        return;
+    }
+
+    navigator.geolocation.watchPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const acc = pos.coords.accuracy;
+
+            if (!map) initMap(lat, lon);
+            updateMap(lat, lon);
+
+            document.getElementById('info').innerHTML = `
+                <strong>GPS Data:</strong><br>
+                Latitude: ${lat}<br>
+                Longitude: ${lon}<br>
+                Accuracy: ±${acc} meters<br><br>
+                <strong>IP Info:</strong><br>
+                IP: ${ipData.ip}<br>
+                City: ${ipData.city}<br>
+                Region: ${ipData.region}<br>
+                Country: ${ipData.country_name}<br>
+                Timestamp: ${new Date().toLocaleTimeString()}
+            `;
+        },
+        (err) => {
+            document.getElementById('info').innerHTML = "Error getting location.";
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+}
+</script>
+</body>
+</html>
